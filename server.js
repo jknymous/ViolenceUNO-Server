@@ -3,21 +3,21 @@
    Express + Socket.io multiplayer server
    ============================================================ */
 
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
+const express   = require('express');
+const http      = require('http');
+const { Server }= require('socket.io');
+const cors      = require('cors');
 const { v4: uuidv4 } = require('uuid');
-const path = require('path');
+const path      = require('path');
 const {
   initGame, playCard, drawAction,
   swapHand, callUno, getPublicState, drawCards
 } = require('./gameLogic');
 
-const app = express();
+const app    = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+const io     = new Server(server, {
+  cors: { origin: '*', methods: ['GET','POST'] }
 });
 
 app.use(cors());
@@ -68,9 +68,9 @@ io.on('connection', socket => {
     const code = generateCode();
     rooms[code] = {
       code,
-      hostId: socket.id,
+      hostId:  socket.id,
       players: [{
-        id: socket.id,
+        id:   socket.id,
         name: (playerName || 'PLAYER_1').toUpperCase().slice(0, 14),
         ulti: ulti || 'ghost',
         ultiCharge: 0,
@@ -84,19 +84,19 @@ io.on('connection', socket => {
 
     socket.join(code);
     console.log(`[ROOM] Created ${code} by ${socket.id}`);
-    cb({ ok: true, code, players: rooms[code].players });
+    cb({ ok:true, code, players: rooms[code].players });
     broadcastRoom(code, 'lobbyUpdate', { players: rooms[code].players, code });
   });
 
   // ── JOIN ROOM ────────────────────────────────────────────
   socket.on('joinRoom', ({ code, playerName, ulti }, cb) => {
     const room = rooms[code?.toUpperCase()];
-    if (!room) return cb({ ok: false, reason: 'Room not found' });
-    if (room.status !== 'lobby') return cb({ ok: false, reason: 'Game already started' });
-    if (room.players.length >= 8) return cb({ ok: false, reason: 'Room is full (max 8)' });
+    if (!room)            return cb({ ok:false, reason:'Room not found' });
+    if (room.status !== 'lobby') return cb({ ok:false, reason:'Game already started' });
+    if (room.players.length >= 8) return cb({ ok:false, reason:'Room is full (max 8)' });
 
     const player = {
-      id: socket.id,
+      id:   socket.id,
       name: (playerName || `PLAYER_${room.players.length + 1}`).toUpperCase().slice(0, 14),
       ulti: ulti || 'ghost',
       ultiCharge: 0,
@@ -106,8 +106,8 @@ io.on('connection', socket => {
     socket.join(code);
 
     console.log(`[ROOM] ${player.name} joined ${code}`);
-    cb({ ok: true, code, players: room.players, hostId: room.hostId, chaosRules: room.chaosRules });
-    broadcastRoom(code, 'lobbyUpdate', { players: room.players, hostId: room.hostId });
+    cb({ ok:true, code, players:room.players, hostId:room.hostId, chaosRules:room.chaosRules });
+    broadcastRoom(code, 'lobbyUpdate', { players:room.players, hostId:room.hostId });
     emitLog(code, `${player.name} JOINED THE ROOM`, 'hi');
   });
 
@@ -127,12 +127,12 @@ io.on('connection', socket => {
     const code = generateCode();
     rooms[code] = {
       code, hostId: socket.id,
-      players: [{ id: socket.id, name: (playerName || 'PLAYER_1').toUpperCase(), ulti: ulti || 'ghost', ultiCharge: 0, ready: false }],
-      gameState: null, chaosRules: {}, status: 'lobby', awaitSwap: null,
+      players: [{ id:socket.id, name:(playerName||'PLAYER_1').toUpperCase(), ulti:ulti||'ghost', ultiCharge:0, ready:false }],
+      gameState:null, chaosRules:{}, status:'lobby', awaitSwap:null,
     };
     socket.join(code);
-    cb({ ok: true, code, created: true, players: rooms[code].players });
-    broadcastRoom(code, 'lobbyUpdate', { players: rooms[code].players, code });
+    cb({ ok:true, code, created:true, players:rooms[code].players });
+    broadcastRoom(code, 'lobbyUpdate', { players:rooms[code].players, code });
   });
 
   // ── UPDATE SETTINGS (host only) ──────────────────────────
@@ -149,33 +149,33 @@ io.on('connection', socket => {
     if (!room) return;
     const player = room.players.find(p => p.id === socket.id);
     if (player) { player.ready = true; player.ulti = ulti || player.ulti; }
-    broadcastRoom(room.code, 'lobbyUpdate', { players: room.players, hostId: room.hostId });
+    broadcastRoom(room.code, 'lobbyUpdate', { players:room.players, hostId:room.hostId });
   });
 
   // ── START GAME (host only) ───────────────────────────────
   socket.on('startGame', (_, cb) => {
     const room = getRoomBySocket(socket.id);
-    if (!room) return cb?.({ ok: false, reason: 'Room not found' });
-    if (room.hostId !== socket.id) return cb?.({ ok: false, reason: 'Only host can start' });
-    if (room.players.length < 2) return cb?.({ ok: false, reason: 'Need at least 2 players' });
+    if (!room)                        return cb?.({ ok:false, reason:'Room not found' });
+    if (room.hostId !== socket.id)    return cb?.({ ok:false, reason:'Only host can start' });
+    if (room.players.length < 2)      return cb?.({ ok:false, reason:'Need at least 2 players' });
 
-    room.status = 'playing';
+    room.status    = 'playing';
     room.gameState = initGame(room.players, room.chaosRules);
 
     console.log(`[GAME] Started in room ${room.code} — ${room.players.length} players`);
     broadcastRoom(room.code, 'gameStarted', {});
     broadcastStateToAll(room);
     emitLog(room.code, `GAME STARTED — ${room.players.length} PLAYERS`, 'hi');
-    cb?.({ ok: true });
+    cb?.({ ok:true });
   });
 
   // ── PLAY CARD ────────────────────────────────────────────
-  socket.on('playCard', ({ cardIdx, chosenColor }, cb) => {
+  socket.on('playCard', ({ cardIdx, chosenColor, cardData }, cb) => {
     const room = getRoomBySocket(socket.id);
-    if (!room || room.status !== 'playing') return cb?.({ ok: false });
+    if (!room || room.status !== 'playing') return cb?.({ ok:false });
 
-    const result = playCard(room.gameState, socket.id, cardIdx, chosenColor);
-    if (!result.ok) return cb?.({ ok: false, reason: result.reason });
+    const result = playCard(room.gameState, socket.id, cardIdx, chosenColor, cardData);
+    if (!result.ok) return cb?.({ ok:false, reason:result.reason });
 
     // Broadcast events as log messages
     result.events?.forEach(ev => handleEvent(room, ev));
@@ -185,40 +185,40 @@ io.on('connection', socket => {
       // Send swap request only to the player who played the 7
       socket.emit('requestSwapTarget', {
         players: room.players.filter(p => p.id !== socket.id).map(p => ({
-          id: p.id, name: p.name, cardCount: room.gameState.hands[p.id]?.length
+          id:p.id, name:p.name, cardCount:room.gameState.hands[p.id]?.length
         }))
       });
     }
 
     broadcastStateToAll(room);
-    cb?.({ ok: true });
+    cb?.({ ok:true });
   });
 
   // ── DRAW CARD ────────────────────────────────────────────
   socket.on('drawCard', (_, cb) => {
     const room = getRoomBySocket(socket.id);
-    if (!room || room.status !== 'playing') return cb?.({ ok: false });
+    if (!room || room.status !== 'playing') return cb?.({ ok:false });
 
     const result = drawAction(room.gameState, socket.id);
-    if (!result.ok) return cb?.({ ok: false, reason: result.reason });
+    if (!result.ok) return cb?.({ ok:false, reason:result.reason });
 
     result.events?.forEach(ev => handleEvent(room, ev));
     broadcastStateToAll(room);
-    cb?.({ ok: true });
+    cb?.({ ok:true });
   });
 
   // ── SWAP HAND (7 rule) ───────────────────────────────────
   socket.on('swapHand', ({ targetId }, cb) => {
     const room = getRoomBySocket(socket.id);
-    if (!room || room.awaitSwap !== socket.id) return cb?.({ ok: false });
+    if (!room || room.awaitSwap !== socket.id) return cb?.({ ok:false });
 
     const result = swapHand(room.gameState, socket.id, targetId);
-    if (!result.ok) return cb?.({ ok: false });
+    if (!result.ok) return cb?.({ ok:false });
 
     room.awaitSwap = null;
     result.events?.forEach(ev => handleEvent(room, ev));
     broadcastStateToAll(room);
-    cb?.({ ok: true });
+    cb?.({ ok:true });
   });
 
   // ── CALL UNO ─────────────────────────────────────────────
@@ -227,7 +227,7 @@ io.on('connection', socket => {
     if (!room || room.status !== 'playing') return;
     const ev = callUno(room.gameState, socket.id);
     emitLog(room.code, `${ev.player} CALLS UNO!`, 'bad');
-    broadcastRoom(room.code, 'unoCalled', { player: ev.player });
+    broadcastRoom(room.code, 'unoCalled', { player:ev.player });
   });
 
   // ── CHAT MESSAGE ─────────────────────────────────────────
@@ -237,7 +237,7 @@ io.on('connection', socket => {
     const player = room.players.find(p => p.id === socket.id);
     broadcastRoom(room.code, 'chatMsg', {
       player: player?.name || 'UNKNOWN',
-      text: (text || '').slice(0, 80),
+      text:   (text || '').slice(0, 80),
     });
   });
 
@@ -264,7 +264,7 @@ io.on('connection', socket => {
         room.hostId = room.players[0].id;
         emitLog(room.code, `${room.players[0].name} IS NOW HOST`, 'hi');
       }
-      broadcastRoom(room.code, 'lobbyUpdate', { players: room.players, hostId: room.hostId });
+      broadcastRoom(room.code, 'lobbyUpdate', { players:room.players, hostId:room.hostId });
       return;
     }
 
@@ -275,13 +275,13 @@ io.on('connection', socket => {
         if (remaining.length > 0) {
           room.hostId = remaining[0].id;
           emitLog(room.code, `${remaining[0].name} IS NOW HOST`, 'hi');
-          broadcastRoom(room.code, 'hostChanged', { newHostId: room.hostId });
+          broadcastRoom(room.code, 'hostChanged', { newHostId:room.hostId });
         }
       }
 
       // Remove player from game state
       const state = room.gameState;
-      const pidx = state.players.findIndex(p => p.id === socket.id);
+      const pidx  = state.players.findIndex(p => p.id === socket.id);
       if (pidx !== -1) {
         // Put disconnected player's hand back in deck
         if (state.hands[socket.id]) {
@@ -313,16 +313,16 @@ io.on('connection', socket => {
   // ── REMATCH ──────────────────────────────────────────────
   socket.on('rematch', (_, cb) => {
     const room = getRoomBySocket(socket.id);
-    if (!room || room.hostId !== socket.id) return cb?.({ ok: false });
+    if (!room || room.hostId !== socket.id) return cb?.({ ok:false });
 
-    room.status = 'playing';
+    room.status    = 'playing';
     room.gameState = initGame(room.players, room.chaosRules);
     room.awaitSwap = null;
 
     broadcastRoom(room.code, 'gameStarted', {});
     broadcastStateToAll(room);
     emitLog(room.code, 'REMATCH STARTED!', 'hi');
-    cb?.({ ok: true });
+    cb?.({ ok:true });
   });
 
   // ── LEAVE ROOM ───────────────────────────────────────────
@@ -334,32 +334,32 @@ io.on('connection', socket => {
 // ── EVENT → LOG MAPPER ────────────────────────────────────────
 function handleEvent(room, ev) {
   const logMap = {
-    cardPlayed: e => emitLog(room.code, `${e.player} PLAYS ${e.card.color.toUpperCase()} ${e.card.value.toUpperCase()}`, ''),
-    colorChosen: e => emitLog(room.code, `${e.player} CHOSE ${e.color.toUpperCase()}`, 'hi'),
+    cardPlayed:      e => emitLog(room.code, `${e.player} PLAYS ${e.card.color.toUpperCase()} ${e.card.value.toUpperCase()}`, ''),
+    colorChosen:     e => emitLog(room.code, `${e.player} CHOSE ${e.color.toUpperCase()}`, 'hi'),
     directionReversed: () => emitLog(room.code, 'DIRECTION REVERSED!', 'hi'),
-    playerSkipped: e => emitLog(room.code, `${e.player} SKIPPED`, 'warn'),
-    drewCards: e => emitLog(room.code, `${e.player} DRAWS ${e.count}`, 'warn'),
-    stackGrew: e => emitLog(room.code, `STACK +${e.total} TOTAL`, 'bad'),
-    handsRotated: () => emitLog(room.code, '0-ROTATE: ALL HANDS ROTATED!', 'hi'),
-    handsSwapped: e => emitLog(room.code, `${e.from} SWAPPED WITH ${e.to}`, 'hi'),
+    playerSkipped:   e => emitLog(room.code, `${e.player} SKIPPED`, 'warn'),
+    drewCards:       e => emitLog(room.code, `${e.player} DRAWS ${e.count}`, 'warn'),
+    stackGrew:       e => emitLog(room.code, `STACK +${e.total} TOTAL`, 'bad'),
+    handsRotated:    () => emitLog(room.code, '0-ROTATE: ALL HANDS ROTATED!', 'hi'),
+    handsSwapped:    e => emitLog(room.code, `${e.from} SWAPPED WITH ${e.to}`, 'hi'),
     firewallBlocked: e => emitLog(room.code, `${e.player} FIREWALL BLOCKS ${e.amount}!`, 'vip'),
-    deckReshuffled: () => emitLog(room.code, 'DECK RESHUFFLED', 'hi'),
-    unoPenalty: e => emitLog(room.code, `${e.player} FORGOT UNO! +2`, 'bad'),
-    gameOver: e => {
+    deckReshuffled:  () => emitLog(room.code, 'DECK RESHUFFLED', 'hi'),
+    unoPenalty:      e => emitLog(room.code, `${e.player} FORGOT UNO! +2`, 'bad'),
+    gameOver:        e => {
       emitLog(room.code, `🏆 ${e.winner} WINS!`, 'hi');
       room.status = 'finished';
-      broadcastRoom(room.code, 'gameOver', { winner: e.winner, winnerId: e.winnerId });
+      broadcastRoom(room.code, 'gameOver', { winner:e.winner, winnerId:e.winnerId });
     },
-    turnChanged: () => { }, // handled by broadcastStateToAll
+    turnChanged: () => {}, // handled by broadcastStateToAll
   };
   const handler = logMap[ev.type];
   if (handler) handler(ev);
 }
 
 // ── HEALTH CHECK ─────────────────────────────────────────────
-app.get('/health', (_, res) => res.json({ status: 'ok', rooms: Object.keys(rooms).length }));
+app.get('/health', (_, res) => res.json({ status:'ok', rooms:Object.keys(rooms).length }));
 app.get('/api/rooms', (_, res) => res.json(
-  Object.values(rooms).map(r => ({ code: r.code, players: r.players.length, status: r.status }))
+  Object.values(rooms).map(r => ({ code:r.code, players:r.players.length, status:r.status }))
 ));
 
 // ── START ─────────────────────────────────────────────────────

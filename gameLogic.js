@@ -79,7 +79,10 @@ function canPlay(state, socketId, card) {
   if (card.type === 'wild')  return true;
   if (card.type === 'wild4') {
     if (state.chaosRules.noBluff) return true;
-    return !state.hands[socketId].some(c => c.color === state.currentColor);
+    if (!state.currentColor) return true; // no color set yet, always ok
+    return !state.hands[socketId].some(c =>
+      c && c.color === state.currentColor
+    );
   }
   if (state.drawStack > 0 && state.chaosRules.stackPlus)
     return card.value === '+2' || card.type === 'wild4';
@@ -88,17 +91,35 @@ function canPlay(state, socketId, card) {
 }
 
 // ── PLAY CARD ─────────────────────────────────────────────────
-function playCard(state, socketId, cardIdx, chosenColor) {
+function playCard(state, socketId, cardIdx, chosenColor, cardData) {
   const player = state.players[state.currentPlayer];
   if (player.id !== socketId) return { ok:false, reason:'Not your turn' };
 
   const hand = state.hands[socketId];
-  const card = hand[cardIdx];
+
+  // Find card by identity (color+value) first — more reliable than index
+  // since client and server hand order can drift after multiple operations
+  let realIdx = -1;
+  if (cardData && cardData.color && cardData.value) {
+    realIdx = hand.findIndex(c =>
+      c && c.color === cardData.color && c.value === cardData.value &&
+      c.type === cardData.type
+    );
+    // If multiple same cards, prefer the one closest to cardIdx
+    if (realIdx === -1) {
+      // Fallback: try exact index
+      realIdx = cardIdx;
+    }
+  } else {
+    realIdx = cardIdx;
+  }
+
+  const card = hand[realIdx];
   if (!card) return { ok:false, reason:'Card not found' };
   if (!canPlay(state, socketId, card)) return { ok:false, reason:'Illegal play' };
 
   // Remove card from hand
-  hand.splice(cardIdx, 1);
+  hand.splice(realIdx, 1);
   state.discard.push(card);
   if (card.color !== 'wild') state.currentColor = card.color;
 
