@@ -206,6 +206,7 @@ function reshuffleDeck(state, events) {
 // ── DRAW (player action) ──────────────────────────────────────
 function drawAction(state, socketId) {
   const player = state.players[state.currentPlayer];
+  if (!player) return { ok: false, reason: 'No current player' };
   if (player.id !== socketId) return { ok: false, reason: 'Not your turn' };
 
   const events = [];
@@ -220,12 +221,15 @@ function drawAction(state, socketId) {
     } else {
       drawCards(state, socketId, total, events);
     }
-    return { ok: true, events, ...advanceTurn(state, []) };
+    // After eating stack, advance turn (skip = false, just move to next)
+    const adv = advanceTurn(state, []);
+    return { ok: true, events: [...events, ...adv.events] };
   }
 
+  // Normal draw 1 — then end turn
   drawCards(state, socketId, 1, events);
-  // Player may play the drawn card — client handles this
-  return { ok: true, events, ...advanceTurn(state, []) };
+  const adv = advanceTurn(state, []);
+  return { ok: true, events: [...events, ...adv.events] };
 }
 
 // ── SWAP HAND (7 rule) ────────────────────────────────────────
@@ -289,14 +293,18 @@ function advanceTurn(state, events, skip = false) {
 
 // ── PUBLIC VIEW (hide other players' hands) ───────────────────
 function getPublicState(state, forSocketId) {
+  // Filter out any undefined/null cards from hands (safety guard)
+  const myRawHand = state.hands[forSocketId] || [];
+  const myHand = myRawHand.filter(c => c && c.color && c.value);
+
   return {
     players: state.players.map(p => ({
       id: p.id,
       name: p.name,
       ulti: p.ulti,
-      cardCount: state.hands[p.id]?.length || 0,
+      cardCount: (state.hands[p.id] || []).filter(c => c && c.color).length,
     })),
-    myHand: state.hands[forSocketId] || [],
+    myHand,
     discard: state.discard,
     currentColor: state.currentColor,
     currentPlayer: state.currentPlayer,
