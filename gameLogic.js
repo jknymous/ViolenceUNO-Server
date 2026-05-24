@@ -3,28 +3,28 @@
    Server-side authoritative game logic
    ============================================================ */
 
-const COLORS = ['red', 'blue', 'green', 'yellow'];
-const SPECIALS = ['skip', 'reverse', '+2'];
+const COLORS   = ['red','blue','green','yellow'];
+const SPECIALS = ['skip','reverse','+2'];
 
 // ── DECK ─────────────────────────────────────────────────────
 function createDeck(numPlayers) {
   const copies = numPlayers <= 3 ? 1 : numPlayers <= 6 ? 2 : 3;
-  const deck = [];
+  const deck   = [];
   for (let d = 0; d < copies; d++) {
     COLORS.forEach(col => {
-      deck.push({ color: col, value: '0', type: 'number' });
-      ['1', '2', '3', '4', '5', '6', '7', '8', '9'].forEach(v => {
-        deck.push({ color: col, value: v, type: 'number' });
-        deck.push({ color: col, value: v, type: 'number' });
+      deck.push({ color:col, value:'0', type:'number' });
+      ['1','2','3','4','5','6','7','8','9'].forEach(v => {
+        deck.push({ color:col, value:v, type:'number' });
+        deck.push({ color:col, value:v, type:'number' });
       });
       SPECIALS.forEach(v => {
-        deck.push({ color: col, value: v, type: 'special' });
-        deck.push({ color: col, value: v, type: 'special' });
+        deck.push({ color:col, value:v, type:'special' });
+        deck.push({ color:col, value:v, type:'special' });
       });
     });
     for (let i = 0; i < 4; i++) {
-      deck.push({ color: 'wild', value: 'wild', type: 'wild' });
-      deck.push({ color: 'wild', value: '+4', type: 'wild4' });
+      deck.push({ color:'wild', value:'wild', type:'wild'  });
+      deck.push({ color:'wild', value:'+4',   type:'wild4' });
     }
   }
   return shuffle(deck);
@@ -56,18 +56,18 @@ function initGame(players, chaosRules) {
     players,                          // [{ id, name, ulti }]
     hands,                            // { socketId: [cards] }
     deck,
-    discard: [first],
-    currentColor: first.color,
+    discard:       [first],
+    currentColor:  first.color,
     currentPlayer: 0,                 // index into players[]
-    direction: 1,
-    turn: 1,
-    drawStack: 0,
-    chaosRules: chaosRules || {},
-    ultiCharges: Object.fromEntries(players.map(p => [p.id, p.ultiCharge || 0])),
-    firewallUsed: [],
-    unoShouted: [],                // socket ids who called UNO
-    status: 'playing',         // playing | finished
-    winner: null,
+    direction:     1,
+    turn:          1,
+    drawStack:     0,
+    chaosRules:    chaosRules || {},
+    ultiCharges:   Object.fromEntries(players.map(p => [p.id, p.ultiCharge || 0])),
+    firewallUsed:  [],
+    unoShouted:    [],                // socket ids who called UNO
+    status:        'playing',         // playing | finished
+    winner:        null,
   };
 }
 
@@ -76,7 +76,7 @@ function canPlay(state, socketId, card) {
   if (state.players[state.currentPlayer].id !== socketId) return false;
   const top = state.discard[state.discard.length - 1];
 
-  if (card.type === 'wild') return true;
+  if (card.type === 'wild')  return true;
   if (card.type === 'wild4') {
     if (state.chaosRules.noBluff) return true;
     return !state.hands[socketId].some(c => c.color === state.currentColor);
@@ -90,33 +90,33 @@ function canPlay(state, socketId, card) {
 // ── PLAY CARD ─────────────────────────────────────────────────
 function playCard(state, socketId, cardIdx, chosenColor) {
   const player = state.players[state.currentPlayer];
-  if (player.id !== socketId) return { ok: false, reason: 'Not your turn' };
+  if (player.id !== socketId) return { ok:false, reason:'Not your turn' };
 
   const hand = state.hands[socketId];
   const card = hand[cardIdx];
-  if (!card) return { ok: false, reason: 'Card not found' };
-  if (!canPlay(state, socketId, card)) return { ok: false, reason: 'Illegal play' };
+  if (!card) return { ok:false, reason:'Card not found' };
+  if (!canPlay(state, socketId, card)) return { ok:false, reason:'Illegal play' };
 
   // Remove card from hand
   hand.splice(cardIdx, 1);
   state.discard.push(card);
   if (card.color !== 'wild') state.currentColor = card.color;
 
-  const events = [{ type: 'cardPlayed', player: player.name, card }];
+  const events = [{ type:'cardPlayed', player:player.name, card }];
 
   // Win check
   if (hand.length === 0) {
     state.status = 'finished';
     state.winner = socketId;
-    events.push({ type: 'gameOver', winner: player.name, winnerId: socketId });
-    return { ok: true, events };
+    events.push({ type:'gameOver', winner:player.name, winnerId:socketId });
+    return { ok:true, events };
   }
 
   // Chaos 7
   if (state.chaosRules.rule7 && card.value === '7') {
     // Client must send swapTarget separately via swapHand event
-    events.push({ type: 'awaitSwap', from: socketId });
-    return { ok: true, events, awaitSwap: true };
+    events.push({ type:'awaitSwap', from:socketId });
+    return { ok:true, events, awaitSwap:true };
   }
 
   // Chaos 0
@@ -125,14 +125,14 @@ function playCard(state, socketId, cardIdx, chosenColor) {
     state.players.forEach((p, i) => {
       state.hands[p.id] = saved[(i - state.direction + state.players.length) % state.players.length];
     });
-    events.push({ type: 'handsRotated' });
+    events.push({ type:'handsRotated' });
   }
 
   // Wild / Wild+4
   if (card.type === 'wild' || card.type === 'wild4') {
     if (chosenColor && COLORS.includes(chosenColor)) {
       state.currentColor = chosenColor;
-      events.push({ type: 'colorChosen', color: chosenColor, player: player.name });
+      events.push({ type:'colorChosen', color:chosenColor, player:player.name });
     }
     if (card.type === 'wild4') {
       const result = applyDrawStack(state, 4, events);
@@ -146,14 +146,14 @@ function playCard(state, socketId, cardIdx, chosenColor) {
 
   if (card.value === 'reverse') {
     state.direction *= -1;
-    events.push({ type: 'directionReversed' });
+    events.push({ type:'directionReversed' });
     if (state.players.length === 2) return advanceTurn(state, events, true);
   }
 
   if (card.value === '+2') {
     if (state.chaosRules.stackPlus) {
       state.drawStack += 2;
-      events.push({ type: 'stackGrew', total: state.drawStack });
+      events.push({ type:'stackGrew', total:state.drawStack });
     } else {
       const result = applyDrawStack(state, 2, events);
       if (result.skip) return advanceTurn(state, events, true);
@@ -164,24 +164,24 @@ function playCard(state, socketId, cardIdx, chosenColor) {
 }
 
 function applyDrawStack(state, amount, events) {
-  const nextIdx = getNextIdx(state);
-  const nextP = state.players[nextIdx];
-  const blocked = nextP.ulti === 'firewall' && !state.firewallUsed.includes(nextP.id);
+  const nextIdx  = getNextIdx(state);
+  const nextP    = state.players[nextIdx];
+  const blocked  = nextP.ulti === 'firewall' && !state.firewallUsed.includes(nextP.id);
 
   if (blocked) {
     state.firewallUsed.push(nextP.id);
-    events.push({ type: 'firewallBlocked', player: nextP.name, amount });
-    return { skip: true };
+    events.push({ type:'firewallBlocked', player:nextP.name, amount });
+    return { skip:true };
   }
 
   if (state.chaosRules.stackPlus) {
     state.drawStack += amount;
-    events.push({ type: 'stackGrew', total: state.drawStack });
-    return { skip: false };
+    events.push({ type:'stackGrew', total:state.drawStack });
+    return { skip:false };
   }
 
   drawCards(state, nextP.id, amount, events);
-  return { skip: true };
+  return { skip:true };
 }
 
 function drawCards(state, socketId, count, events = []) {
@@ -191,59 +191,59 @@ function drawCards(state, socketId, count, events = []) {
     if (state.deck.length === 0) reshuffleDeck(state, events);
     if (state.deck.length > 0) hand.push(state.deck.pop());
   }
-  events.push({ type: 'drewCards', player: player?.name, socketId, count });
+  events.push({ type:'drewCards', player:player?.name, socketId, count });
   return events;
 }
 
 function reshuffleDeck(state, events) {
   if (state.discard.length <= 1) return;
-  const top = state.discard.pop();
-  state.deck = shuffle(state.discard);
+  const top   = state.discard.pop();
+  state.deck  = shuffle(state.discard);
   state.discard = [top];
-  events.push({ type: 'deckReshuffled' });
+  events.push({ type:'deckReshuffled' });
 }
 
 // ── DRAW (player action) ──────────────────────────────────────
 function drawAction(state, socketId) {
   const player = state.players[state.currentPlayer];
-  if (!player) return { ok: false, reason: 'No current player' };
-  if (player.id !== socketId) return { ok: false, reason: 'Not your turn' };
+  if (!player) return { ok:false, reason:'No current player' };
+  if (player.id !== socketId) return { ok:false, reason:'Not your turn' };
 
   const events = [];
 
   if (state.drawStack > 0) {
-    const total = state.drawStack;
+    const total    = state.drawStack;
     state.drawStack = 0;
-    const blocked = player.ulti === 'firewall' && !state.firewallUsed.includes(socketId);
+    const blocked  = player.ulti === 'firewall' && !state.firewallUsed.includes(socketId);
     if (blocked) {
       state.firewallUsed.push(socketId);
-      events.push({ type: 'firewallBlocked', player: player.name, amount: total });
+      events.push({ type:'firewallBlocked', player:player.name, amount:total });
     } else {
       drawCards(state, socketId, total, events);
     }
     // After eating stack, advance turn (skip = false, just move to next)
     const adv = advanceTurn(state, []);
-    return { ok: true, events: [...events, ...adv.events] };
+    return { ok:true, events:[...events, ...adv.events] };
   }
 
   // Normal draw 1 — then end turn
   drawCards(state, socketId, 1, events);
   const adv = advanceTurn(state, []);
-  return { ok: true, events: [...events, ...adv.events] };
+  return { ok:true, events:[...events, ...adv.events] };
 }
 
 // ── SWAP HAND (7 rule) ────────────────────────────────────────
 function swapHand(state, fromId, toId) {
   const from = state.players.find(p => p.id === fromId);
-  const to = state.players.find(p => p.id === toId);
-  if (!from || !to) return { ok: false };
+  const to   = state.players.find(p => p.id === toId);
+  if (!from || !to) return { ok:false };
 
   const tmp = state.hands[fromId];
   state.hands[fromId] = state.hands[toId];
-  state.hands[toId] = tmp;
+  state.hands[toId]   = tmp;
 
-  const events = [{ type: 'handsSwapped', from: from.name, to: to.name }];
-  return { ok: true, events, ...advanceTurn(state, []) };
+  const events = [{ type:'handsSwapped', from:from.name, to:to.name }];
+  return { ok:true, events, ...advanceTurn(state, []) };
 }
 
 // ── UNO CALL ─────────────────────────────────────────────────
@@ -252,7 +252,7 @@ function callUno(state, socketId) {
     state.unoShouted.push(socketId);
   }
   const player = state.players.find(p => p.id === socketId);
-  return { type: 'unoCalled', player: player?.name };
+  return { type:'unoCalled', player:player?.name };
 }
 
 // ── UNO PENALTY CHECK ────────────────────────────────────────
@@ -262,7 +262,7 @@ function checkUnoPenalty(state, socketId, events) {
   if (hand?.length === 1 && !state.unoShouted.includes(socketId)) {
     drawCards(state, socketId, 2, events);
     const player = state.players.find(p => p.id === socketId);
-    events.push({ type: 'unoPenalty', player: player?.name });
+    events.push({ type:'unoPenalty', player:player?.name });
   }
 }
 
@@ -281,42 +281,42 @@ function advanceTurn(state, events, skip = false) {
 
   if (skip) {
     const skippedIdx = getNextIdx(state, false);
-    events.push({ type: 'playerSkipped', player: state.players[skippedIdx].name });
+    events.push({ type:'playerSkipped', player:state.players[skippedIdx].name });
     state.currentPlayer = getNextIdx(state, true);
   } else {
     state.currentPlayer = getNextIdx(state, false);
   }
   state.turn++;
-  events.push({ type: 'turnChanged', currentPlayer: state.players[state.currentPlayer] });
-  return { ok: true, events };
+  events.push({ type:'turnChanged', currentPlayer:state.players[state.currentPlayer] });
+  return { ok:true, events };
 }
 
 // ── PUBLIC VIEW (hide other players' hands) ───────────────────
 function getPublicState(state, forSocketId) {
-  // Filter out any undefined/null cards from hands (safety guard)
+  // Filter out any undefined/null cards — safety guard
   const myRawHand = state.hands[forSocketId] || [];
-  const myHand = myRawHand.filter(c => c && c.color && c.value);
+  const myHand    = myRawHand.filter(c => c != null && c.color && c.value && c.type);
 
   return {
-    players: state.players.map(p => ({
-      id: p.id,
-      name: p.name,
-      ulti: p.ulti,
-      cardCount: (state.hands[p.id] || []).filter(c => c && c.color).length,
+    players:       state.players.map(p => ({
+      id:          p.id,
+      name:        p.name,
+      ulti:        p.ulti,
+      cardCount:   (state.hands[p.id] || []).filter(c => c && c.color).length,
     })),
     myHand,
-    discard: state.discard,
-    currentColor: state.currentColor,
+    discard:       state.discard,
+    currentColor:  state.currentColor,
     currentPlayer: state.currentPlayer,
     currentPlayerId: state.players[state.currentPlayer]?.id,
-    direction: state.direction,
-    turn: state.turn,
-    drawStack: state.drawStack,
-    deckCount: state.deck.length,
-    chaosRules: state.chaosRules,
-    status: state.status,
-    winner: state.winner,
-    ultiCharges: state.ultiCharges,
+    direction:     state.direction,
+    turn:          state.turn,
+    drawStack:     state.drawStack,
+    deckCount:     state.deck.length,
+    chaosRules:    state.chaosRules,
+    status:        state.status,
+    winner:        state.winner,
+    ultiCharges:   state.ultiCharges,
   };
 }
 

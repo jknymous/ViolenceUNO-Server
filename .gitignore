@@ -1,0 +1,27 @@
+# Dependencies — jangan di-push, Railway install sendiri
+node_modules/
+server/node_modules/
+
+# Environment variables — rahasia, jangan di-push
+.env
+.env.local
+.env.production
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build output (kalau nanti ada)
+dist/
+build/
